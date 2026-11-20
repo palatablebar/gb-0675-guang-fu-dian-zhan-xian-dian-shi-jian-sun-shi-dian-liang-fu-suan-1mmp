@@ -8,7 +8,12 @@ def client(tmp_path,monkeypatch):
 def test_api_idempotent(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch);a=c.post('/api/runs',json={}).json();b=c.post('/api/runs',json={}).json();assert a['manifest']['run_id']==b['manifest']['run_id'];assert len(c.get('/api/runs').json())==1
 def test_stale_review(tmp_path,monkeypatch):
-    c=client(tmp_path,monkeypatch);a=c.post('/api/runs',json={}).json();url='/api/runs/'+a['manifest']['run_id']+'/review';assert c.post(url,json={'revision':1}).status_code==200;assert c.post(url,json={'revision':1}).status_code==409
+    c=client(tmp_path,monkeypatch);a=c.post('/api/runs',json={}).json();url='/api/runs/'+a['manifest']['run_id']+'/seal'
+    assert c.post(url,json={'revision':1,'reviewer':'值班复核员'}).status_code==200
+    # 同一版重复签章被拒，旧签章不受影响。
+    assert c.post(url,json={'revision':1,'reviewer':'值班复核员'}).status_code==409
+    # 陈旧版号签章冲突。
+    assert c.post(url,json={'revision':99,'reviewer':'值班复核员'}).status_code==409
 def test_seven_entries(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch)
     for k in main.MODULES:
@@ -21,7 +26,7 @@ def test_missing_run(tmp_path,monkeypatch):
 def test_restart_store(tmp_path,sample):
     p=str(tmp_path/'durable.sqlite');store.save(p,sample);assert store.get(p,sample['manifest']['run_id'])['manifest']['sha256']==sample['manifest']['sha256']
 def test_bad_revision(tmp_path,monkeypatch):
-    c=client(tmp_path,monkeypatch);s=c.post('/api/runs',json={}).json();assert c.post('/api/runs/'+s['manifest']['run_id']+'/review',json={'revision':0}).status_code==422
+    c=client(tmp_path,monkeypatch);s=c.post('/api/runs',json={}).json();assert c.post('/api/runs/'+s['manifest']['run_id']+'/seal',json={'revision':0,'reviewer':'x'}).status_code==422
 
 def test_clean_navigation_run_preserved(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch)

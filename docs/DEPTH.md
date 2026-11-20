@@ -29,6 +29,9 @@
 | TRAP-06 | 全角千分位 | 静默错算或证据丢失 | 以可复核规则显式处理 | `app/modules/devices/rules.py` | `tests/test_devices.py::test_fullwidth_number` |
 | TRAP-11 | UTC归一 | 静默错算或证据丢失 | 以可复核规则显式处理 | `app/modules/devices/rules.py` | `tests/test_devices.py::test_time_equivalence` |
 | TRAP-23 | 限电区间并集 | 静默错算或证据丢失 | 以可复核规则显式处理 | `app/modules/slicing/rules.py` | `tests/test_slicing.py::test_overlapping_real` |
+| TRAP-24 | 签章时同批重算证据漂移 | 直接覆盖原批结果，签章指向另一组证据；或每次另起批号，追不回同次复核的连续版本 | 批号只绑不可变输入，版号递增；正式/候选分轨，签章绑定采信/基线/损失三域哈希，切换前快照重放校验，旧签章转历史版永久可还原 | `app/store.py` `app/evidence.py` | `tests/test_seal_versions.py` |
+| TRAP-25 | 重试重算重复建候选 | 候选堆积、正式/候选混淆 | `(run_id,evidence_digest)` 唯一约束，同证据幂等复用 | `app/store.py` | `tests/test_seal_versions.py::test_retry_same_rerun_is_idempotent` |
+| TRAP-26 | 证据未对齐候选顶替正式 | 篡改或重放不一致的候选覆盖签章结果 | 服务端重放引擎比对证据哈希，不符 422 回滚，旧签章保留 | `app/main.py::_verify_replay` | `tests/test_seal_versions.py::test_misaligned_candidate_rejected` |
 
 ## 对账规则
 

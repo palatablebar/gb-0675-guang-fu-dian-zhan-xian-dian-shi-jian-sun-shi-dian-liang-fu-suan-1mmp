@@ -1,1 +1,34 @@
-{% extends 'base.html' %}{% block content %}<section class="panel timeline"><div class="panel__head"><h2>事件并集</h2><span>{{ state.event_unions|length }} 区间</span></div><div class="ruler"><span>10:00</span><span>10:10</span><span>10:20</span><span>10:30</span><span>10:40</span></div>{% for row in state.event_unions %}<div class="event-track"><label>{{ row.device }}</label><div class="event-band" style="width:{{ row.seconds/2400*80 }}%"><span>{{ row.seconds//60 }} min</span></div><span class="event-id">{{ row.event_ids|join(' + ') }}</span></div>{% endfor %}</section><div class="grid"><section class="panel power-panel"><div class="panel__head"><h2>功率截面</h2><span>kW / INV-A</span></div><svg class="power-chart" viewBox="0 0 600 210" role="img" aria-label="INV-A实际功率和估计基线"><g class="chart-grid"><path d="M40 30H570 M40 90H570 M40 150H570 M40 180H570"/></g><text x="5" y="34">100</text><text x="12" y="94">60</text><text x="17" y="184">0</text>{% for row in state.estimates if row.device=='INV-A' %}{% set x=50+loop.index0*165 %}<rect class="event-shade" x="{{ x }}" y="25" width="155" height="155"/>{% if row.baseline_kw is not none %}<path class="baseline-line" d="M{{ x }} {{ 180-row.baseline_kw|float*1.5 }}h155"/>{% endif %}{% if row.actual_kw is not none %}<path class="actual-line" d="M{{ x }} {{ 180-row.actual_kw|float*1.5 }}h155"/>{% else %}<text x="{{ x+45 }}" y="110">缺测</text>{% endif %}{% endfor %}<text x="46" y="205">10:00</text><text x="215" y="205">10:10</text><text x="380" y="205">10:20</text></svg><div class="legend"><span class="baseline-key">基线</span><span class="actual-key">实际</span><span>未定 {{ state.balance.unknown_segments }} 片段</span></div></section><section class="panel"><div class="panel__head"><h2>未定与隔离</h2><span>{{ state.quarantine|length }} 行</span></div>{{ evidence(state.quarantine) }}<a class="export" href="/api/export/{{ state.manifest.run_id }}">下载运行凭证</a></section></div><section class="panel main-panel"><div class="panel__head"><h2>运行归档</h2><span>{{ view.rows|length }} 条</span></div>{{ evidence(view.rows) }}</section>{% endblock %}
+{% extends 'base.html' %}{% block content %}
+{% if comparison %}
+<section class="panel candidate-panel"><div class="panel__head"><h2>候选差异（v{{ candidate_rows[0].seq }} 待审）</h2>
+<span class="role-badge role-candidate">候选证据 <code>{{ candidate_rows[0].evidence_digest[:16] }}…</code></span></div>
+{% if comparison.identical %}<p class="candidate-note">重算证据与正式版完全一致，无需顶替。</p>{% else %}
+<div class="domain-grid">
+{% for d in comparison.domains %}
+<div class="domain-card {% if d.aligned %}aligned{% else %}diverged{% endif %}">
+<b>{{ d.name }}域</b><em>{{ '一致' if d.aligned else '有差异' }}</em>
+<small>正式 {{ d.official[:12] }}…</small><small>候选 {{ d.candidate[:12] }}…</small>
+</div>{% endfor %}
+</div>
+<table class="diff-table"><thead><tr><th>指标</th><th>正式版 v{{ state.revision }}</th><th>候选版 v{{ candidate_rows[0].seq }}</th><th>变更</th></tr></thead><tbody>
+{% for m in comparison.metrics %}<tr class="{% if m.changed %}row-changed{% endif %}"><td>{{ m.name }}</td><td>{{ m.official if m.official is not none else '—' }}</td><td>{{ m.candidate if m.candidate is not none else '—' }}</td><td>{% if m.changed %}<b>变化</b>{% else %}同{% endif %}</td></tr>{% endfor %}
+<tr><td>片段级变更数</td><td colspan="2">{{ comparison.changed_segments }}</td><td></td></tr>
+</tbody></table>
+<div class="action-row">
+<input id="reviewer" type="text" maxlength="30" placeholder="签章人姓名" {% if viewing.role!='official' %}disabled{% endif %}>
+<button id="seal-btn" {% if viewing.role!='official' %}disabled{% endif %}>签章正式版 v{{ state.revision }}</button>
+<button id="promote-btn" class="secondary" data-seq="{{ candidate_rows[0].seq }}">切换候选为正式（保留旧版签章）</button>
+</div>
+<p class="candidate-note">证据未对齐的候选在服务端重放校验失败时返回 EVIDENCE_MISALIGNED，不会顶替正式结果。</p>
+{% endif %}
+</section>
+{% elif viewing and viewing.role=='official' %}
+<section class="panel candidate-panel"><div class="panel__head"><h2>候选差异</h2></div>
+<p class="candidate-note">当前没有待审候选。同批复算产生新证据后，候选在此显示，重试同一重算不会重复生成。</p>
+<div class="action-row"><input id="reviewer" type="text" maxlength="30" placeholder="签章人姓名">
+<button id="seal-btn">签章正式版 v{{ state.revision }}</button></div>
+</section>
+{% endif %}
+<section class="panel timeline"><div class="panel__head"><h2>事件并集</h2><span>{{ state.event_unions|length }} 区间</span></div><div class="ruler"><span>10:00</span><span>10:10</span><span>10:20</span><span>10:30</span><span>10:40</span></div>{% for row in state.event_unions %}<div class="event-track"><label>{{ row.device }}</label><div class="event-band" style="width:{{ row.seconds/2400*80 }}%"><span>{{ row.seconds//60 }} min</span></div><span class="event-id">{{ row.event_ids|join(' + ') }}</span></div>{% endfor %}</section>
+<div class="grid"><section class="panel power-panel"><div class="panel__head"><h2>功率截面</h2><span>kW / INV-A</span></div><svg class="power-chart" viewBox="0 0 600 210" role="img" aria-label="INV-A实际功率和估计基线"><g class="chart-grid"><path d="M40 30H570 M40 90H570 M40 150H570 M40 180H570"/></g><text x="5" y="34">100</text><text x="12" y="94">60</text><text x="17" y="184">0</text>{% for row in state.estimates if row.device=='INV-A' %}{% set x=50+loop.index0*165 %}<rect class="event-shade" x="{{ x }}" y="25" width="155" height="155"/>{% if row.baseline_kw is not none %}<path class="baseline-line" d="M{{ x }} {{ 180-row.baseline_kw|float*1.5 }}h155"/>{% endif %}{% if row.actual_kw is not none %}<path class="actual-line" d="M{{ x }} {{ 180-row.actual_kw|float*1.5 }}h155"/>{% else %}<text x="{{ x+45 }}" y="110">缺测</text>{% endif %}{% endfor %}<text x="46" y="205">10:00</text><text x="215" y="205">10:20</text><text x="380" y="205">10:20</text></svg><div class="legend"><span class="baseline-key">基线</span><span class="actual-key">实际</span><span>未定 {{ state.balance.unknown_segments }} 片段</span></div></section><section class="panel"><div class="panel__head"><h2>未定与隔离</h2><span>{{ state.quarantine|length }} 行</span></div>{{ evidence(state.quarantine) }}<a class="export" href="/api/export/{{ state.manifest.run_id }}{% if viewing.role not in ['official','sealed'] %}?seq={{ state.revision }}{% endif %}">下载本版运行凭证（v{{ state.revision }}）</a></section></div>
+<section class="panel main-panel"><div class="panel__head"><h2>运行归档</h2><span>{{ view.rows|length }} 条</span></div>{{ evidence(view.rows) }}</section>{% endblock %}
